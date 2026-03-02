@@ -1,1 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini Mario Browser Game</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(#bfe8ff, #effbff);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px;
+      gap: 10px;
+    }
+    h1 {
+      margin: 4px 0;
+      font-size: 1.1rem;
+      text-align: center;
+    }
+    .wrap {
+      width: 100%;
+      max-width: 960px;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #87ceeb;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
+      max-width: 960px;
+    }
+    button {
+      border: none;
+      background: #111827;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .help {
+      font-size: .9rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Mini Mario (JavaScript Canvas)</h1>
+  <div class="wrap">
+    <canvas id="game" width="960" height="540"></canvas>
+  </div>
+  <div class="help">Keyboard: ← → move, Space/↑ jump, R restart</div>
+  <div class="controls">
+    <button id="left">← Left</button>
+    <button id="right">Right →</button>
+    <button id="jump">Jump ↑</button>
+  </div>
 
+  <script>
+    const c = document.getElementById("game");
+    const x = c.getContext("2d");
+
+    const keys = { l: false, r: false, j: false };
+    const G = 1700;
+    const worldW = 3600;
+
+    const state = { score: 0, lives: 3, over: false, win: false, cam: 0 };
+    const p = { x: 100, y: 420, w: 34, h: 44, vx: 0, vy: 0, sp: 280, jp: 620, g: false };
+
+    const plats = [
+      { x: 0, y: 500, w: worldW, h: 40 },
+      { x: 250, y: 430, w: 140, h: 20 },
+      { x: 500, y: 370, w: 140, h: 20 },
+      { x: 760, y: 320, w: 140, h: 20 },
+      { x: 1040, y: 390, w: 140, h: 20 },
+      { x: 1320, y: 340, w: 140, h: 20 },
+      { x: 1640, y: 300, w: 140, h: 20 },
+      { x: 1960, y: 360, w: 180, h: 20 },
+      { x: 2320, y: 420, w: 220, h: 20 },
+      { x: 2700, y: 340, w: 170, h: 20 },
+      { x: 3050, y: 290, w: 160, h: 20 }
+    ];
+
+    const coins = [
+      [290,390],[540,330],[800,280],[1080,350],[1360,300],
+      [1680,260],[2000,320],[2360,380],[2750,300],[3090,250]
+    ].map(([x,y]) => ({ x, y, r: 9, t: false }));
+
+    const enemies = [
+      { x: 680, y: 468, w: 30, h: 32, v: 90, min: 620, max: 860, d: false },
+      { x: 1840, y: 468, w: 30, h: 32, v: 100, min: 1760, max: 2060, d: false },
+      { x: 2920, y: 468, w: 30, h: 32, v: 120, min: 2860, max: 3120, d: false }
+    ];
+
+    const flag = { x: 3400, y: 360, w: 18, h: 140 };
+    const start = { x: 100, y: 420 };
+
+    const hit = (a, b) =>
+      a.x < b.x + b.w &&
+      a.x + a.w > b.x &&
+      a.y < b.y + b.h &&
+      a.y + a.h > b.y;
+
+    function resetPos() {
+      p.x = start.x;
+      p.y = start.y;
+      p.vx = 0;
+      p.vy = 0;
+      p.g = false;
+      state.cam = 0;
+    }
+
+    function resetAll() {
+      state.score = 0;
+      state.lives = 3;
+      state.over = false;
+      state.win = false;
+      coins.forEach(c => c.t = false);
+      enemies.forEach(e => e.d = false);
+      resetPos();
+    }
+
+    function hurt() {
+      state.lives--;
+      if (state.lives <= 0) state.over = true;
+      resetPos();
+    }
+
+    function update(dt) {
+      if (state.over || state.win) return;
+
+      if (keys.l && !keys.r) p.vx = -p.sp;
+      else if (keys.r && !keys.l) p.vx = p.sp;
+      else p.vx *= 0.82;
+
+      if (Math.abs(p.vx) < 4) p.vx = 0;
+
+      if (keys.j && p.g) {
+        p.vy = -p.jp;
+        p.g = false;
+      }
+
+      p.vy += G * dt;
+
+      p.x += p.vx * dt;
+      for (const t of plats) {
+        if (hit(p, t)) {
+          if (p.vx > 0) p.x = t.x - p.w;
+          else if (p.vx < 0) p.x = t.x + t.w;
+          p.vx = 0;
+        }
+      }
+
+      p.y += p.vy * dt;
+      p.g = false;
+      for (const t of plats) {
+        if (hit(p, t)) {
+          if (p.vy > 0) {
+            p.y = t.y - p.h;
+            p.vy = 0;
+            p.g = true;
+          } else if (p.vy < 0) {
+            p.y = t.y + t.h;
+            p.vy = 0;
+          }
+        }
+      }
+
+      if (p.y > 760) hurt();
+
+      for (const c0 of coins) {
+        if (c0.t) continue;
+        const dx = (p.x + p.w / 2) - c0.x;
+        const dy = (p.y + p.h / 2) - c0.y;
+        if (Math.hypot(dx, dy) < c0.r + 16) {
+          c0.t = true;
+          state.score += 10;
+        }
+      }
+
+      for (const e of enemies) {
+        if (e.d) continue;
+        e.x += e.v * dt;
+        if (e.x < e.min || e.x > e.max) e.v *= -1;
+
+        if (hit(p, e)) {
+          const pBottom = p.y + p.h;
+          if (p.vy > 0 && pBottom - e.y < 20) {
+            e.d = true;
+            p.vy = -330;
+            state.score += 25;
+          } else {
+            hurt();
+            break;
+          }
+        }
+      }
+
+      if (hit(p, flag)) state.win = true;
+      state.cam = Math.max(0, Math.min(worldW - c.width, p.x - c.width * 0.35));
+    }
+
+    function draw() {
+      x.clearRect(0, 0, c.width, c.height);
+
+      const g = x.createLinearGradient(0, 0, 0, c.height);
+      g.addColorStop(0, "#9be7ff");
+      g.addColorStop(1, "#eaf8ff");
+      x.fillStyle = g;
+      x.fillRect(0, 0, c.width, c.height);
+
+      x.save();
+      x.translate(-state.cam, 0);
+
+      x.fillStyle = "#374151";
+      x.fillRect(flag.x, flag.y, flag.w, flag.h);
+      x.fillStyle = "#ef4444";
+      x.fillRect(flag.x + flag.w, flag.y + 8, 42, 22);
+
+      for (const t of plats) {
+        x.fillStyle = t.y >= 500 ? "#6b8e23" : "#8b4513";
+        x.fillRect(t.x, t.y, t.w, t.h);
+      }
+
+      for (const c0 of coins) {
+        if (c0.t) continue;
+        x.fillStyle = "#ffd60a";
+        x.beginPath();
+        x.arc(c0.x, c0.y, c0.r, 0, Math.PI * 2);
+        x.fill();
+      }
+
+      for (const e of enemies) {
+        if (e.d) continue;
+        x.fillStyle = "#6d28d9";
+        x.fillRect(e.x, e.y, e.w, e.h);
+      }
+
+      x.fillStyle = "#ff3b30";
+      x.fillRect(p.x, p.y, p.w, p.h);
+
+      x.restore();
+
+      x.fillStyle = "#111827";
+      x.font = "bold 20px Arial";
+      x.fillText("Score: " + state.score, 16, 30);
+      x.fillText("Lives: " + state.lives, 16, 56);
+
+      if (state.over || state.win) {
+        x.fillStyle = "rgba(0,0,0,.45)";
+        x.fillRect(0, 0, c.width, c.height);
+        x.fillStyle = "#fff";
+        x.textAlign = "center";
+        x.font = "bold 52px Arial";
+        x.fillText(state.over ? "Game Over" : "You Win!", c.width / 2, c.height / 2);
+        x.font = "24px Arial";
+        x.fillText("Press R to restart", c.width / 2, c.height / 2 + 40);
+        x.textAlign = "left";
+      }
+    }
+
+    addEventListener("keydown", e => {
+      if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.l = true;
+      if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.r = true;
+      if (e.key === "ArrowUp" || e.key === " " || e.key.toLowerCase() === "w") keys.j = true;
+      if (e.key.toLowerCase() === "r") resetAll();
+    });
+
+    addEventListener("keyup", e => {
+      if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.l = false;
+      if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.r = false;
+      if (e.key === "ArrowUp" || e.key === " " || e.key.toLowerCase() === "w") keys.j = false;
+    });
+
+    function bind(id, k) {
+      const b = document.getElementById(id);
+      const on = e => { e.preventDefault(); keys[k] = true; };
+      const off = e => { e.preventDefault(); keys[k] = false; };
+      b.addEventListener("touchstart", on, { passive: false });
+      b.addEventListener("touchend", off, { passive: false });
+      b.addEventListener("mousedown", on);
+      b.addEventListener("mouseup", off);
+      b.addEventListener("mouseleave", off);
+    }
+
+    bind("left", "l");
+    bind("right", "r");
+    bind("jump", "j");
+
+    let last = performance.now();
+    (function loop(now) {
+      const dt = Math.min((now - last) / 1000, 1 / 30);
+      last = now;
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    })(last);
+  </script>
+</body>
+</html>
